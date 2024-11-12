@@ -4,6 +4,8 @@
 #include <netinet/in.h>
 #include <memory.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #define BUFFER_LENGTH 1024
 #define ENABLE_HTTP_RESPONSE 1
@@ -28,17 +30,22 @@ struct conn_item {
 typedef struct conn_item connection_t;
 
 int http_request(connection_t *conn) {
-
+    return 0;
 }
 
 int http_response(connection_t *conn) {
+    int filefd = open("resource/index.html", O_RDONLY);
+    struct stat stat_buf;
+    fstat(filefd, &stat_buf);
+    long length = stat_buf.st_size;
     conn->w_len = sprintf(conn->w_buffer,
-                         "HTTP/1.1 200 OK\r\n"
+                          "HTTP/1.1 200 OK\r\n"
                          "Accept-Ranges: bytes\r\n"
-                         "Content-Length: 82\r\n"
+                         "Content-Length: %ld\r\n"
                          "Content-Type: text/html\r\n"
-                         "Date: Sat, 06 Aug 2023 13:16:46 GMT\r\n\r\n"
-                         "<html><head><title>sxy.sxy</title></head><body><h1>Sxy</h1></body></html>\r\n\r\n");
+                         "Date: Tue, 12 Nov 2024 12:54:32 GMT\r\n\r\n", length);
+    int count = read(filefd, conn->w_buffer + conn->w_len, BUFFER_LENGTH - conn->w_len);
+    conn->w_len += count;
     return conn->w_len;
 }
 
