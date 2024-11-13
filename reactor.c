@@ -6,11 +6,22 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
-#define BUFFER_LENGTH 1024
+#define BUFFER_LENGTH 128
 #define ENABLE_HTTP_RESPONSE 1
+#define TIME_SUB_MS(tv1, tv2) ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
 
 typedef int(*RCALLBACK)(int fd);
+
+int epfd;
+
+int recv_cb(int connfd);
+int send_cb(int fd);
+
+struct epoll_event events[1048576] = {0};
+struct timeval tv_begin;
+struct timeval tv_cur;
 
 struct conn_item {
     int fd;
@@ -51,13 +62,6 @@ int http_response(connection_t *conn) {
 
 #endif
 
-int epfd;
-struct epoll_event events[4096] = {0};
-
-int recv_cb(int connfd);
-
-int send_cb(int fd);
-
 void set_events(int fd, int event, int flag) {
     struct epoll_event ev;
     ev.events = event;
@@ -78,12 +82,22 @@ int accept_cb(int sockfd) {
     }
     set_events(clientfd, EPOLLIN, 1);
     connList[clientfd].fd = clientfd;
+
     memset(connList[clientfd].r_buffer, 0, BUFFER_LENGTH);
     memset(connList[clientfd].w_buffer, 0, BUFFER_LENGTH);
     connList[clientfd].r_len = 0;
     connList[clientfd].w_len = 0;
+
     connList[clientfd].recv_t.recv_callback = recv_cb;
     connList[clientfd].send_callback = send_cb;
+
+    if ((clientfd % 1000) == 999) {
+        gettimeofday(&tv_cur, NULL);
+        int time_used = TIME_SUB_MS(tv_cur, tv_begin);
+        memcpy(&tv_begin, &tv_cur, sizeof(struct timeval));
+        printf("clientfd:%d, time_used:%d\n", clientfd, time_used);
+    }
+
     return clientfd;
 }
 
@@ -116,7 +130,7 @@ int send_cb(int connfd) {
     return count;
 }
 
-int main() {
+int Init_server(unsigned short port) {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
         perror("sockdf");
@@ -127,20 +141,31 @@ int main() {
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(8080);
+    server_addr.sin_port = htons(port);
 
     if (bind(sockfd, (struct sockaddr *) &server_addr, sizeof(struct sockaddr)) == -1) {
         perror("bind");
         return -1;
     }
     listen(sockfd, 10);
+    return sockfd;
+}
 
+int main() {
+    int port_count = 10;
+    unsigned port = 8080;
     epfd = epoll_create(1);
-    set_events(sockfd, EPOLLIN, 1);
-    connList[sockfd].fd = sockfd;
-    connList[sockfd].recv_t.accept_callback = accept_cb;
+    for (int i = 0; i < port_count; i++) {
+        int sockfd = Init_server(port + i);
+        connList[sockfd].fd = sockfd;
+        connList[sockfd].recv_t.accept_callback = accept_cb;
+        set_events(sockfd, EPOLLIN, 1);
+    }
+
+    gettimeofday(&tv_begin, NULL);
+
     while (1) {
-        int nready = epoll_wait(epfd, events, 1024, -1);
+        int nready = epoll_wait(epfd, events, 1048576, -1);
         for (int i = 0; i < nready; i++) {
             int connfd = events[i].data.fd;
             if (events[i].events & EPOLLIN) {
