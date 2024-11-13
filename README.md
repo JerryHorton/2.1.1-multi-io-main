@@ -212,6 +212,12 @@
       - 容易出错：若编写不当，很容易错过后续数据或出现“饥饿”问题（文件描述符准备就绪却未被处理）。
     - **适用场景**:  ET 模式适合高性能、高并发应用，如 Web 服务器、聊天服务器等需要处理大量连接的场景。然而，它需要开发者更为细致的控制和维护。
 
+ulimit -n 1048576
+sudo modprobe ip_conntrack 
+sudo sysctl net/nf_conntrack_max="1048576"
+sudo sysctl net/ipv4/ip_local_port_range="1024 65535"
+sudo sysctl fs/file_max="1048576"
+sudo sysctl net/ipv4/tcp_mem="252144  786432 786432"
 
 
 

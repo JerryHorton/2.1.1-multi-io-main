@@ -34,7 +34,7 @@ struct conn_item {
         RCALLBACK recv_callback;
     } recv_t;
     RCALLBACK send_callback;
-} connList[102400];
+} connList[1048576];
 
 #if ENABLE_HTTP_RESPONSE
 
@@ -152,7 +152,7 @@ int Init_server(unsigned short port) {
 }
 
 int main() {
-    int port_count = 10;
+    int port_count = 30;
     unsigned port = 8080;
     epfd = epoll_create(1);
     for (int i = 0; i < port_count; i++) {
