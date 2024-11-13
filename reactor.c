@@ -23,7 +23,7 @@ struct conn_item {
         RCALLBACK recv_callback;
     } recv_t;
     RCALLBACK send_callback;
-} connList[1024];
+} connList[102400];
 
 #if ENABLE_HTTP_RESPONSE
 
@@ -52,7 +52,7 @@ int http_response(connection_t *conn) {
 #endif
 
 int epfd;
-struct epoll_event events[1024] = {0};
+struct epoll_event events[4096] = {0};
 
 int recv_cb(int connfd);
 
@@ -98,16 +98,21 @@ int recv_cb(int connfd) {
         return -1;
     }
     connList[connfd].r_len += count;
-    http_response(&connList[connfd]);
+    //http_request(&connList[connfd]);
+    //http_response(&connList[connfd]);
+    memcpy(connList[connfd].w_buffer, connList[connfd].r_buffer, connList[connfd].r_len);
+    connList[connfd].w_len = connList[connfd].r_len;
+    connList[connfd].r_len -= connList[connfd].r_len;
     set_events(connfd, EPOLLOUT, 0);
     return count;
 }
 
-int send_cb(int fd) {
-    char *buffer = connList[fd].w_buffer;
-    int idx = connList[fd].w_len;
-    int count = send(fd, buffer, idx, 0);
-    set_events(fd, EPOLLIN, 0);
+int send_cb(int connfd) {
+    char *buffer = connList[connfd].w_buffer;
+    int idx = connList[connfd].w_len;
+    //http_response(&connList[connfd]);
+    int count = send(connfd, buffer, idx, 0);
+    set_events(connfd, EPOLLIN, 0);
     return count;
 }
 
@@ -140,10 +145,10 @@ int main() {
             int connfd = events[i].data.fd;
             if (events[i].events & EPOLLIN) {
                 int recv_count = connList[connfd].recv_t.accept_callback(connfd);
-                printf("recv <-- buffer:%s\n", connList[connfd].r_buffer);
+                //printf("recv <-- buffer:%s\n", connList[connfd].r_buffer);
             } else if (events[i].events & EPOLLOUT) {
                 int send_count = connList[connfd].send_callback(connfd);
-                printf("send --> buffer:%s\n", connList[connfd].w_buffer);
+                //printf("send --> buffer:%s\n", connList[connfd].w_buffer);
             }
         }
     }
